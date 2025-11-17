@@ -37,7 +37,7 @@ class MaintenanceSubmitWorker(QThread):
 class AddMaintenanceForm(QWidget):
     """Form to add a new maintenance record"""
 
-    def __init__(self, vehicle, on_back=None, on_success=None):
+    def __init__(self, vehicle, on_back=None, on_success=None, tracking_type="Mileage"):
         """
         Initialize the add maintenance form
         
@@ -45,11 +45,13 @@ class AddMaintenanceForm(QWidget):
             vehicle: The vehicle object
             on_back: Callback to go back
             on_success: Callback when maintenance is successfully added
+            tracking_type: "Hours" or "Mileage" to determine field type
         """
         super().__init__()
         self.vehicle = vehicle
         self.on_back = on_back
         self.on_success = on_success
+        self.tracking_type = tracking_type
         self.submit_worker = None
         self.init_ui()
 
@@ -95,9 +97,14 @@ class AddMaintenanceForm(QWidget):
         self.date_completed_input.setPlaceholderText("MM/DD/YYYY (optional)")
         form_layout.addRow("Date Completed:", self.date_completed_input)
 
-        self.mileage_input = QLineEdit()
-        self.mileage_input.setPlaceholderText("Current mileage")
-        form_layout.addRow("Mileage:", self.mileage_input)
+        # Dynamic tracking field based on type
+        self.tracking_input = QLineEdit()
+        if self.tracking_type == "Hours":
+            self.tracking_input.setPlaceholderText("Current hours")
+            form_layout.addRow("Hours:", self.tracking_input)
+        else:
+            self.tracking_input.setPlaceholderText("Current mileage")
+            form_layout.addRow("Mileage:", self.tracking_input)
 
         self.cost_input = QLineEdit()
         self.cost_input.setPlaceholderText("0.00")
@@ -129,10 +136,15 @@ class AddMaintenanceForm(QWidget):
             "job": self.job_input.text().strip(),
             "date_started": self.date_started_input.text().strip(),
             "date_completed": self.date_completed_input.text().strip(),
-            "mileage": self.mileage_input.text().strip(),
             "cost": self.cost_input.text().strip(),
             "notes": self.notes_input.text().strip()
         }
+        
+        # Add tracking field dynamically
+        if self.tracking_type == "Hours":
+            data["hours"] = self.tracking_input.text().strip()
+        else:
+            data["mileage"] = self.tracking_input.text().strip()
 
         # Add vehicle identifier
         if isinstance(self.vehicle, dict):

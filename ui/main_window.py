@@ -134,10 +134,17 @@ class MainWindow(QMainWindow):
         if self.add_maintenance_screen:
             self.stacked_widget.removeWidget(self.add_maintenance_screen)
             self.add_maintenance_screen.deleteLater()
+        
+        # Get tracking type from vehicle details screen
+        tracking_type = "Mileage"
+        if self.vehicle_details_screen and hasattr(self.vehicle_details_screen, 'tracking_type'):
+            tracking_type = self.vehicle_details_screen.tracking_type
+            
         self.add_maintenance_screen = AddMaintenanceForm(
             self.current_vehicle,
             on_back=self.return_to_vehicle_details,
-            on_success=self.return_to_vehicle_details
+            on_success=self.return_to_vehicle_details,
+            tracking_type=tracking_type
         )
         self.stacked_widget.addWidget(self.add_maintenance_screen)
         self.stacked_widget.setCurrentWidget(self.add_maintenance_screen)

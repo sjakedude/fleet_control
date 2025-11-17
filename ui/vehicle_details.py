@@ -69,6 +69,7 @@ class VehicleDetailsScreen(QWidget):
         self.delete_worker = None
         self.selected_maintenance = None
         self.selected_purchase = None
+        self.tracking_type = "Mileage"  # Default tracking type
         self.init_ui()
         self.load_maintenance()
         self.load_purchases()
@@ -99,8 +100,9 @@ class VehicleDetailsScreen(QWidget):
         maint_label.setStyleSheet("font-size: 18px; font-weight: bold;")
         layout.addWidget(maint_label)
         self.maint_table = QTableWidget(0, 6)
+        # Headers will be set dynamically based on API response
         self.maint_table.setHorizontalHeaderLabels([
-            "Job", "Date Started", "Date Completed", "Mileage", "Cost", "Notes"
+            "Job", "Date Started", "Date Completed", "Tracking", "Cost", "Notes"
         ])
         self.maint_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.maint_table.itemSelectionChanged.connect(self.on_maintenance_selection_changed)
@@ -298,13 +300,34 @@ class VehicleDetailsScreen(QWidget):
         # Store maintenance data for deletion
         self.maintenance_data = items
         
+        # Determine tracking type (Hours vs Mileage) from first item
+        tracking_header = "Tracking"
+        if items:
+            first_item = items[0] if isinstance(items[0], dict) else {}
+            if any(key in first_item for key in ["hours", "hour", "engine_hours"]):
+                tracking_header = "Hours"
+                self.tracking_type = "Hours"
+            elif any(key in first_item for key in ["mileage", "miles", "milage", "odometer"]):
+                tracking_header = "Mileage"
+                self.tracking_type = "Mileage"
+        
+        # Update table headers dynamically
+        headers = ["Job", "Date Started", "Date Completed", tracking_header, "Cost", "Notes"]
+        self.maint_table.setHorizontalHeaderLabels(headers)
+        
         for row_idx, item in enumerate(items):
             # Accept dict-like inputs
             rec = item if isinstance(item, dict) else {}
             job = get_any(rec, ["job", "title", "task"]) 
             date_started = get_any(rec, ["date_started", "started", "start_date"]) 
             date_completed = get_any(rec, ["date_completed", "completed", "end_date"]) 
-            mileage = get_any(rec, ["mileage", "miles", "milage"]) 
+            
+            # Dynamic tracking value - check for hours first, then mileage
+            tracking_value = (
+                get_any(rec, ["hours", "hour", "engine_hours"]) or
+                get_any(rec, ["mileage", "miles", "milage", "odometer"])
+            )
+            
             cost = get_any(rec, ["cost", "price", "amount"]) 
             notes = get_any(rec, ["notes", "note", "details"]) 
 
@@ -312,7 +335,7 @@ class VehicleDetailsScreen(QWidget):
             self.maint_table.setItem(row_idx, 0, QTableWidgetItem(str(job)))
             self.maint_table.setItem(row_idx, 1, QTableWidgetItem(str(date_started)))
             self.maint_table.setItem(row_idx, 2, QTableWidgetItem(str(date_completed)))
-            self.maint_table.setItem(row_idx, 3, QTableWidgetItem(str(mileage)))
+            self.maint_table.setItem(row_idx, 3, QTableWidgetItem(str(tracking_value)))
             self.maint_table.setItem(row_idx, 4, QTableWidgetItem(str(cost)))
             self.maint_table.setItem(row_idx, 5, QTableWidgetItem(str(notes)))
 
