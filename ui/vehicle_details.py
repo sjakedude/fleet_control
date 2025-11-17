@@ -99,10 +99,10 @@ class VehicleDetailsScreen(QWidget):
         maint_label = QLabel("Maintenance")
         maint_label.setStyleSheet("font-size: 18px; font-weight: bold;")
         layout.addWidget(maint_label)
-        self.maint_table = QTableWidget(0, 6)
+        self.maint_table = QTableWidget(0, 7)
         # Headers will be set dynamically based on API response
         self.maint_table.setHorizontalHeaderLabels([
-            "Job", "Date Started", "Date Completed", "Tracking", "Cost", "Notes"
+            "ID", "Job", "Date Started", "Date Completed", "Tracking", "Cost", "Notes"
         ])
         self.maint_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.maint_table.itemSelectionChanged.connect(self.on_maintenance_selection_changed)
@@ -115,9 +115,9 @@ class VehicleDetailsScreen(QWidget):
         purch_label = QLabel("Purchases")
         purch_label.setStyleSheet("font-size: 18px; font-weight: bold;")
         layout.addWidget(purch_label)
-        self.purch_table = QTableWidget(0, 5)
+        self.purch_table = QTableWidget(0, 6)
         self.purch_table.setHorizontalHeaderLabels([
-            "Item", "Date Purchased", "Installed", "Cost", "Store"
+            "ID", "Item", "Date Purchased", "Installed", "Cost", "Store"
         ])
         self.purch_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.purch_table.itemSelectionChanged.connect(self.on_purchase_selection_changed)
@@ -179,6 +179,7 @@ class VehicleDetailsScreen(QWidget):
         
         for row_idx, item in enumerate(items):
             rec = item if isinstance(item, dict) else {}
+            item_id = get_any(rec, ["id", "_id"])
             itm = get_any(rec, ["item", "name", "part"])
             date_purchased = get_any(rec, ["date_purchased", "purchased", "date"])
             installed = get_any(rec, ["installed", "is_installed", "status"])
@@ -186,11 +187,12 @@ class VehicleDetailsScreen(QWidget):
             store = get_any(rec, ["store", "vendor", "shop"]) 
 
             self.purch_table.insertRow(row_idx)
-            self.purch_table.setItem(row_idx, 0, QTableWidgetItem(str(itm)))
-            self.purch_table.setItem(row_idx, 1, QTableWidgetItem(str(date_purchased)))
-            self.purch_table.setItem(row_idx, 2, QTableWidgetItem(str(installed)))
-            self.purch_table.setItem(row_idx, 3, QTableWidgetItem(str(cost)))
-            self.purch_table.setItem(row_idx, 4, QTableWidgetItem(str(store)))
+            self.purch_table.setItem(row_idx, 0, QTableWidgetItem(str(item_id)))
+            self.purch_table.setItem(row_idx, 1, QTableWidgetItem(str(itm)))
+            self.purch_table.setItem(row_idx, 2, QTableWidgetItem(str(date_purchased)))
+            self.purch_table.setItem(row_idx, 3, QTableWidgetItem(str(installed)))
+            self.purch_table.setItem(row_idx, 4, QTableWidgetItem(str(cost)))
+            self.purch_table.setItem(row_idx, 5, QTableWidgetItem(str(store)))
 
     def on_purchases_error(self, message: str):
         self.purch_table.setRowCount(1)
@@ -226,13 +228,20 @@ class VehicleDetailsScreen(QWidget):
             QMessageBox.warning(self, "No Selection", "Please select a maintenance record to delete.")
             return
         
+        # Check if maintenance record has an id
+        if "id" not in self.selected_maintenance:
+            QMessageBox.warning(self, "No ID", "Selected maintenance record does not have an ID.")
+            return
+        
         dialog = DeleteConfirmDialog("maintenance", self.selected_maintenance, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # Prepare delete data
             data = dict(self.selected_maintenance)
             
-            # Start delete worker
-            url = "http://theconeportal.net:5000/fleet_control/vehicle_maintenance?vehicle_name=" + self.vehicle["name"].replace(" ", "_").replace(".", "_").lower()
+            # Start delete worker with id parameter
+            vehicle_name = self.vehicle["name"].replace(" ", "_").replace(".", "_").lower()
+            maintenance_id = self.selected_maintenance["id"]
+            url = f"http://theconeportal.net:5000/fleet_control/vehicle_maintenance?vehicle_name={vehicle_name}&id={maintenance_id}"
             self.delete_worker = DeleteWorker(url, data)
             self.delete_worker.success.connect(self.on_delete_success)
             self.delete_worker.error.connect(self.on_delete_error)
@@ -244,13 +253,20 @@ class VehicleDetailsScreen(QWidget):
             QMessageBox.warning(self, "No Selection", "Please select a purchase record to delete.")
             return
         
+        # Check if purchase record has an id
+        if "id" not in self.selected_purchase:
+            QMessageBox.warning(self, "No ID", "Selected purchase record does not have an ID.")
+            return
+        
         dialog = DeleteConfirmDialog("purchase", self.selected_purchase, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             # Prepare delete data
             data = dict(self.selected_purchase)
             
-            # Start delete worker
-            url = "http://theconeportal.net:5000/fleet_control/vehicle_purchases?vehicle_name=" + self.vehicle["name"].replace(" ", "_").replace(".", "_").lower()
+            # Start delete worker with id parameter
+            vehicle_name = self.vehicle["name"].replace(" ", "_").replace(".", "_").lower()
+            purchase_id = self.selected_purchase["id"]
+            url = f"http://theconeportal.net:5000/fleet_control/vehicle_purchases?vehicle_name={vehicle_name}&id={purchase_id}"
             self.delete_worker = DeleteWorker(url, data)
             self.delete_worker.success.connect(self.on_delete_success)
             self.delete_worker.error.connect(self.on_delete_error)
@@ -312,12 +328,13 @@ class VehicleDetailsScreen(QWidget):
                 self.tracking_type = "Mileage"
         
         # Update table headers dynamically
-        headers = ["Job", "Date Started", "Date Completed", tracking_header, "Cost", "Notes"]
+        headers = ["ID", "Job", "Date Started", "Date Completed", tracking_header, "Cost", "Notes"]
         self.maint_table.setHorizontalHeaderLabels(headers)
         
         for row_idx, item in enumerate(items):
             # Accept dict-like inputs
             rec = item if isinstance(item, dict) else {}
+            item_id = get_any(rec, ["id", "_id"])
             job = get_any(rec, ["job", "title", "task"]) 
             date_started = get_any(rec, ["date_started", "started", "start_date"]) 
             date_completed = get_any(rec, ["date_completed", "completed", "end_date"]) 
@@ -332,12 +349,13 @@ class VehicleDetailsScreen(QWidget):
             notes = get_any(rec, ["notes", "note", "details"]) 
 
             self.maint_table.insertRow(row_idx)
-            self.maint_table.setItem(row_idx, 0, QTableWidgetItem(str(job)))
-            self.maint_table.setItem(row_idx, 1, QTableWidgetItem(str(date_started)))
-            self.maint_table.setItem(row_idx, 2, QTableWidgetItem(str(date_completed)))
-            self.maint_table.setItem(row_idx, 3, QTableWidgetItem(str(tracking_value)))
-            self.maint_table.setItem(row_idx, 4, QTableWidgetItem(str(cost)))
-            self.maint_table.setItem(row_idx, 5, QTableWidgetItem(str(notes)))
+            self.maint_table.setItem(row_idx, 0, QTableWidgetItem(str(item_id)))
+            self.maint_table.setItem(row_idx, 1, QTableWidgetItem(str(job)))
+            self.maint_table.setItem(row_idx, 2, QTableWidgetItem(str(date_started)))
+            self.maint_table.setItem(row_idx, 3, QTableWidgetItem(str(date_completed)))
+            self.maint_table.setItem(row_idx, 4, QTableWidgetItem(str(tracking_value)))
+            self.maint_table.setItem(row_idx, 5, QTableWidgetItem(str(cost)))
+            self.maint_table.setItem(row_idx, 6, QTableWidgetItem(str(notes)))
 
     def on_maintenance_error(self, message: str):
         # Indicate error in the table
