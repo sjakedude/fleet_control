@@ -2,14 +2,15 @@
 
 try:
     from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                                  QLineEdit, QPushButton, QMessageBox, QFormLayout)
+                                  QLineEdit, QPushButton, QMessageBox, QFormLayout, QRadioButton, QButtonGroup)
     from PyQt6.QtCore import Qt, QThread, pyqtSignal
 except ImportError:
     from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                                  QLineEdit, QPushButton, QMessageBox, QFormLayout)
+                                  QLineEdit, QPushButton, QMessageBox, QFormLayout, QRadioButton, QButtonGroup)
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 import requests
+from datetime import datetime
 
 
 class PurchaseSubmitWorker(QThread):
@@ -88,12 +89,22 @@ class AddPurchaseForm(QWidget):
         form_layout.addRow("Item:", self.item_input)
 
         self.date_purchased_input = QLineEdit()
+        self.date_purchased_input.setText(datetime.now().strftime("%m/%d/%Y"))
         self.date_purchased_input.setPlaceholderText("MM/DD/YYYY")
         form_layout.addRow("Date Purchased:", self.date_purchased_input)
 
-        self.installed_input = QLineEdit()
-        self.installed_input.setPlaceholderText("Yes/No or date")
-        form_layout.addRow("Installed:", self.installed_input)
+        # Installed radio buttons
+        installed_layout = QHBoxLayout()
+        self.installed_group = QButtonGroup()
+        self.installed_yes = QRadioButton("Yes")
+        self.installed_no = QRadioButton("No")
+        self.installed_no.setChecked(True)  # Default to No
+        self.installed_group.addButton(self.installed_yes, 1)
+        self.installed_group.addButton(self.installed_no, 0)
+        installed_layout.addWidget(self.installed_yes)
+        installed_layout.addWidget(self.installed_no)
+        installed_layout.addStretch()
+        form_layout.addRow("Installed:", installed_layout)
 
         self.cost_input = QLineEdit()
         self.cost_input.setPlaceholderText("0.00")
@@ -121,10 +132,11 @@ class AddPurchaseForm(QWidget):
     def submit_purchase(self):
         """Collect form data and submit to API"""
         # Gather form data
+        installed_value = "Yes" if self.installed_yes.isChecked() else "No"
         data = {
             "item": self.item_input.text().strip(),
             "date_purchased": self.date_purchased_input.text().strip(),
-            "installed": self.installed_input.text().strip(),
+            "installed": installed_value,
             "cost": self.cost_input.text().strip(),
             "store": self.store_input.text().strip()
         }

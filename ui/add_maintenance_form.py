@@ -2,14 +2,15 @@
 
 try:
     from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                                  QLineEdit, QPushButton, QMessageBox, QFormLayout)
+                                  QLineEdit, QPushButton, QMessageBox, QFormLayout, QCheckBox)
     from PyQt6.QtCore import Qt, QThread, pyqtSignal
 except ImportError:
     from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                                  QLineEdit, QPushButton, QMessageBox, QFormLayout)
+                                  QLineEdit, QPushButton, QMessageBox, QFormLayout, QCheckBox)
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 import requests
+from datetime import datetime
 
 
 class MaintenanceSubmitWorker(QThread):
@@ -89,11 +90,16 @@ class AddMaintenanceForm(QWidget):
         self.job_input.setPlaceholderText("Enter job/service description")
         form_layout.addRow("Job:", self.job_input)
 
+        # Auto-populate with today's date
+        today = datetime.now().strftime("%m/%d/%Y")
+        
         self.date_started_input = QLineEdit()
+        self.date_started_input.setText(today)
         self.date_started_input.setPlaceholderText("MM/DD/YYYY")
         form_layout.addRow("Date Started:", self.date_started_input)
 
         self.date_completed_input = QLineEdit()
+        self.date_completed_input.setText(today)
         self.date_completed_input.setPlaceholderText("MM/DD/YYYY (optional)")
         form_layout.addRow("Date Completed:", self.date_completed_input)
 
@@ -106,9 +112,15 @@ class AddMaintenanceForm(QWidget):
             self.tracking_input.setPlaceholderText("Current mileage")
             form_layout.addRow("Mileage:", self.tracking_input)
 
+        # Cost section with checkbox
+        cost_layout = QHBoxLayout()
         self.cost_input = QLineEdit()
         self.cost_input.setPlaceholderText("0.00")
-        form_layout.addRow("Cost:", self.cost_input)
+        self.free_checkbox = QCheckBox("FREE")
+        self.free_checkbox.stateChanged.connect(self.on_free_checkbox_changed)
+        cost_layout.addWidget(self.cost_input)
+        cost_layout.addWidget(self.free_checkbox)
+        form_layout.addRow("Cost:", cost_layout)
 
         self.notes_input = QLineEdit()
         self.notes_input.setPlaceholderText("Additional notes")
@@ -128,6 +140,18 @@ class AddMaintenanceForm(QWidget):
         layout.addLayout(btn_layout)
 
         self.setLayout(layout)
+
+    def on_free_checkbox_changed(self, state):
+        """Handle free checkbox state change"""
+        if state == 2:  # Checked
+            self.cost_input.setText("FREE")
+            self.cost_input.setEnabled(False)
+            self.cost_input.setStyleSheet("background-color: #f0f0f0; color: #666;")
+        else:  # Unchecked
+            self.cost_input.setText("")
+            self.cost_input.setEnabled(True)
+            self.cost_input.setStyleSheet("")
+            self.cost_input.setPlaceholderText("0.00")
 
     def submit_maintenance(self):
         """Collect form data and submit to API"""
