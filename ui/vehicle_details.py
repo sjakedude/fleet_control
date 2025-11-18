@@ -10,6 +10,25 @@ except ImportError:
 import requests
 from ui.delete_dialog import DeleteConfirmDialog, DeleteWorker
 
+class UpdateWorker(QThread):
+    success = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, url: str, data: dict):
+        super().__init__()
+        self.url = url
+        self.data = data
+
+    def run(self):
+        try:
+            resp = requests.put(self.url, json=self.data, timeout=15)
+            resp.raise_for_status()
+            self.success.emit()
+        except requests.exceptions.RequestException as e:
+            self.error.emit(f"Failed to update record: {e}")
+        except Exception as e:
+            self.error.emit(f"Error: {e}")
+
 class MaintenanceFetchWorker(QThread):
     finished = pyqtSignal(list)
     error = pyqtSignal(str)
@@ -67,6 +86,7 @@ class VehicleDetailsScreen(QWidget):
         self.fetch_worker = None
         self.purchases_worker = None
         self.delete_worker = None
+        self.update_worker = None
         self.selected_maintenance = None
         self.selected_purchase = None
         self.tracking_type = "Mileage"  # Default tracking type
@@ -79,7 +99,7 @@ class VehicleDetailsScreen(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(20)
 
-        # Top bar with back button and vehicle name
+        # Top bar with back button, vehicle name, and refresh button
         top_bar = QHBoxLayout()
         back_btn = QPushButton("Back")
         back_btn.setFixedWidth(80)
@@ -93,6 +113,10 @@ class VehicleDetailsScreen(QWidget):
         name_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         top_bar.addWidget(name_label)
         top_bar.addStretch()
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setFixedWidth(80)
+        refresh_btn.clicked.connect(self.refresh_data)
+        top_bar.addWidget(refresh_btn)
         layout.addLayout(top_bar)
 
         # Maintenance table
@@ -126,22 +150,28 @@ class VehicleDetailsScreen(QWidget):
         self.purch_table.setItem(0, 0, QTableWidgetItem("Loading..."))
         layout.addWidget(self.purch_table)
 
-        # Buttons for adding/deleting entries
+        # Buttons for adding/deleting/updating entries
         btn_layout = QHBoxLayout()
         add_maint_btn = QPushButton("Add Maintenance")
         if self.on_add_maintenance:
             add_maint_btn.clicked.connect(self.on_add_maintenance)
+        update_maint_btn = QPushButton("Update Maintenance")
+        update_maint_btn.clicked.connect(self.update_maintenance)
         delete_maint_btn = QPushButton("Delete Maintenance")
         delete_maint_btn.clicked.connect(self.delete_maintenance)
         add_purch_btn = QPushButton("Add Purchase")
-        delete_purch_btn = QPushButton("Delete Purchase")
-        delete_purch_btn.clicked.connect(self.delete_purchase)
         if self.on_add_purchase:
             add_purch_btn.clicked.connect(self.on_add_purchase)
+        update_purch_btn = QPushButton("Update Purchase")
+        update_purch_btn.clicked.connect(self.update_purchase)
+        delete_purch_btn = QPushButton("Delete Purchase")
+        delete_purch_btn.clicked.connect(self.delete_purchase)
         
         btn_layout.addWidget(add_maint_btn)
+        btn_layout.addWidget(update_maint_btn)
         btn_layout.addWidget(delete_maint_btn)
         btn_layout.addWidget(add_purch_btn)
+        btn_layout.addWidget(update_purch_btn)
         btn_layout.addWidget(delete_purch_btn)
         layout.addLayout(btn_layout)
 
@@ -282,6 +312,109 @@ class VehicleDetailsScreen(QWidget):
     def on_delete_error(self, message: str):
         """Handle deletion error"""
         QMessageBox.critical(self, "Error", message)
+
+    def update_maintenance(self):
+        """Update selected maintenance record"""
+        selected_rows = self.maint_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "No Selection", "Please select a maintenance record to update.")
+            return
+        
+        row = selected_rows[0].row()
+        if not hasattr(self, 'maintenance_data') or row >= len(self.maintenance_data):
+            QMessageBox.warning(self, "Invalid Selection", "Selected maintenance record is invalid.")
+            return
+        
+        original_data = self.maintenance_data[row]
+        if "id" not in original_data:
+            QMessageBox.warning(self, "No ID", "Selected maintenance record does not have an ID.")
+            return
+        
+        # Read current values from table cells
+        data = {
+            "id": self.maint_table.item(row, 0).text() if self.maint_table.item(row, 0) else "",
+            "job": self.maint_table.item(row, 1).text() if self.maint_table.item(row, 1) else "",
+            "date_started": self.maint_table.item(row, 2).text() if self.maint_table.item(row, 2) else "",
+            "date_completed": self.maint_table.item(row, 3).text() if self.maint_table.item(row, 3) else "",
+        }
+        
+        # Add tracking value based on type (hours or mileage)
+        tracking_value = self.maint_table.item(row, 4).text() if self.maint_table.item(row, 4) else ""
+        if self.tracking_type == "Hours":
+            data["hours"] = tracking_value
+        else:
+            data["mileage"] = tracking_value
+        
+        data["cost"] = self.maint_table.item(row, 5).text() if self.maint_table.item(row, 5) else ""
+        data["notes"] = self.maint_table.item(row, 6).text() if self.maint_table.item(row, 6) else ""
+        
+        # Start update worker with id parameter
+        vehicle_name = self.vehicle["name"].replace(" ", "_").replace(".", "_").lower()
+        maintenance_id = data["id"]
+        url = f"http://theconeportal.net:5000/fleet_control/vehicle_maintenance?vehicle_name={vehicle_name}&id={maintenance_id}"
+        self.update_worker = UpdateWorker(url, data)
+        self.update_worker.success.connect(self.on_update_success)
+        self.update_worker.error.connect(self.on_update_error)
+        self.update_worker.start()
+
+    def update_purchase(self):
+        """Update selected purchase record"""
+        selected_rows = self.purch_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "No Selection", "Please select a purchase record to update.")
+            return
+        
+        row = selected_rows[0].row()
+        if not hasattr(self, 'purchases_data') or row >= len(self.purchases_data):
+            QMessageBox.warning(self, "Invalid Selection", "Selected purchase record is invalid.")
+            return
+        
+        original_data = self.purchases_data[row]
+        if "id" not in original_data:
+            QMessageBox.warning(self, "No ID", "Selected purchase record does not have an ID.")
+            return
+        
+        # Read current values from table cells
+        data = {
+            "id": self.purch_table.item(row, 0).text() if self.purch_table.item(row, 0) else "",
+            "item": self.purch_table.item(row, 1).text() if self.purch_table.item(row, 1) else "",
+            "date_purchased": self.purch_table.item(row, 2).text() if self.purch_table.item(row, 2) else "",
+            "installed": self.purch_table.item(row, 3).text() if self.purch_table.item(row, 3) else "",
+            "cost": self.purch_table.item(row, 4).text() if self.purch_table.item(row, 4) else "",
+            "store": self.purch_table.item(row, 5).text() if self.purch_table.item(row, 5) else ""
+        }
+        
+        # Start update worker with id parameter
+        vehicle_name = self.vehicle["name"].replace(" ", "_").replace(".", "_").lower()
+        purchase_id = data["id"]
+        url = f"http://theconeportal.net:5000/fleet_control/vehicle_purchases?vehicle_name={vehicle_name}&id={purchase_id}"
+        self.update_worker = UpdateWorker(url, data)
+        self.update_worker.success.connect(self.on_update_success)
+        self.update_worker.error.connect(self.on_update_error)
+        self.update_worker.start()
+
+    def on_update_success(self):
+        """Handle successful update"""
+        QMessageBox.information(self, "Success", "Record updated successfully!")
+        # Reload data
+        self.load_maintenance()
+        self.load_purchases()
+
+    def on_update_error(self, message: str):
+        """Handle update error"""
+        QMessageBox.critical(self, "Error", message)
+
+    def refresh_data(self):
+        """Refresh both maintenance and purchases data"""
+        # Show loading indicators
+        self.maint_table.setRowCount(1)
+        self.maint_table.setItem(0, 0, QTableWidgetItem("Loading..."))
+        self.purch_table.setRowCount(1)
+        self.purch_table.setItem(0, 0, QTableWidgetItem("Loading..."))
+        
+        # Reload data
+        self.load_maintenance()
+        self.load_purchases()
 
     def load_maintenance(self):
         # Determine vehicle identifier to send
