@@ -74,6 +74,28 @@ class PurchasesFetchWorker(QThread):
         except Exception as e:
             self.error.emit(f"Error: {e}")
 
+class HiddenCostsFetchWorker(QThread):
+    finished = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, url: str, params: dict | None = None):
+        super().__init__()
+        self.url = url
+        self.params = params or {}
+
+    def run(self):
+        try:
+            resp = requests.get(self.url, params=self.params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            if not isinstance(data, list):
+                data = [data]
+            self.finished.emit(data)
+        except requests.exceptions.RequestException as e:
+            self.error.emit(f"Failed to fetch hidden costs: {e}")
+        except Exception as e:
+            self.error.emit(f"Error: {e}")
+
 class VehicleDetailsScreen(QWidget):
     """Screen to show details for a selected vehicle"""
 
@@ -85,14 +107,17 @@ class VehicleDetailsScreen(QWidget):
         self.on_add_maintenance = on_add_maintenance
         self.fetch_worker = None
         self.purchases_worker = None
+        self.hidden_costs_worker = None
         self.delete_worker = None
         self.update_worker = None
         self.selected_maintenance = None
         self.selected_purchase = None
+        self.selected_hidden_cost = None
         self.tracking_type = "Mileage"  # Default tracking type
         self.init_ui()
         self.load_maintenance()
         self.load_purchases()
+        self.load_hidden_costs()
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -150,6 +175,21 @@ class VehicleDetailsScreen(QWidget):
         self.purch_table.setItem(0, 0, QTableWidgetItem("Loading..."))
         layout.addWidget(self.purch_table)
 
+        # Hidden Costs table
+        hidden_costs_label = QLabel("Hidden Costs")
+        hidden_costs_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(hidden_costs_label)
+        self.hidden_costs_table = QTableWidget(0, 5)
+        self.hidden_costs_table.setHorizontalHeaderLabels([
+            "ID", "Name", "Amount", "Description", "Date"
+        ])
+        self.hidden_costs_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.hidden_costs_table.itemSelectionChanged.connect(self.on_hidden_cost_selection_changed)
+        # initial loading row
+        self.hidden_costs_table.setRowCount(1)
+        self.hidden_costs_table.setItem(0, 0, QTableWidgetItem("Loading..."))
+        layout.addWidget(self.hidden_costs_table)
+
         # Buttons for adding/deleting/updating entries
         btn_layout = QHBoxLayout()
         add_maint_btn = QPushButton("Add Maintenance")
@@ -174,6 +214,21 @@ class VehicleDetailsScreen(QWidget):
         btn_layout.addWidget(update_purch_btn)
         btn_layout.addWidget(delete_purch_btn)
         layout.addLayout(btn_layout)
+
+        # Hidden Costs buttons
+        hidden_costs_btn_layout = QHBoxLayout()
+        add_hidden_cost_btn = QPushButton("Add Hidden Cost")
+        add_hidden_cost_btn.clicked.connect(self.add_hidden_cost)
+        update_hidden_cost_btn = QPushButton("Update Hidden Cost")
+        update_hidden_cost_btn.clicked.connect(self.update_hidden_cost)
+        delete_hidden_cost_btn = QPushButton("Delete Hidden Cost")
+        delete_hidden_cost_btn.clicked.connect(self.delete_hidden_cost)
+        
+        hidden_costs_btn_layout.addWidget(add_hidden_cost_btn)
+        hidden_costs_btn_layout.addWidget(update_hidden_cost_btn)
+        hidden_costs_btn_layout.addWidget(delete_hidden_cost_btn)
+        hidden_costs_btn_layout.addStretch()  # Push buttons to the left
+        layout.addLayout(hidden_costs_btn_layout)
 
         self.setLayout(layout)
 
@@ -308,6 +363,7 @@ class VehicleDetailsScreen(QWidget):
         # Reload data
         self.load_maintenance()
         self.load_purchases()
+        self.load_hidden_costs()
 
     def on_delete_error(self, message: str):
         """Handle deletion error"""
@@ -399,22 +455,26 @@ class VehicleDetailsScreen(QWidget):
         # Reload data
         self.load_maintenance()
         self.load_purchases()
+        self.load_hidden_costs()
 
     def on_update_error(self, message: str):
         """Handle update error"""
         QMessageBox.critical(self, "Error", message)
 
     def refresh_data(self):
-        """Refresh both maintenance and purchases data"""
+        """Refresh maintenance, purchases, and hidden costs data"""
         # Show loading indicators
         self.maint_table.setRowCount(1)
         self.maint_table.setItem(0, 0, QTableWidgetItem("Loading..."))
         self.purch_table.setRowCount(1)
         self.purch_table.setItem(0, 0, QTableWidgetItem("Loading..."))
+        self.hidden_costs_table.setRowCount(1)
+        self.hidden_costs_table.setItem(0, 0, QTableWidgetItem("Loading..."))
         
         # Reload data
         self.load_maintenance()
         self.load_purchases()
+        self.load_hidden_costs()
 
     def load_maintenance(self):
         # Determine vehicle identifier to send
@@ -494,3 +554,128 @@ class VehicleDetailsScreen(QWidget):
         # Indicate error in the table
         self.maint_table.setRowCount(1)
         self.maint_table.setItem(0, 0, QTableWidgetItem(f"Error: {message}"))
+
+    def load_hidden_costs(self):
+        params = {}
+        if isinstance(self.vehicle, dict):
+            if "name" in self.vehicle:
+                params["vehicle_name"] = self.vehicle.get("name")
+        else:
+            params["vehicle_name"] = str(self.vehicle)
+
+        url = "http://theconeportal.net:5000/fleet_control/vehicle_hidden_costs"
+        self.hidden_costs_worker = HiddenCostsFetchWorker(url, params)
+        self.hidden_costs_worker.finished.connect(self.on_hidden_costs_loaded)
+        self.hidden_costs_worker.error.connect(self.on_hidden_costs_error)
+        self.hidden_costs_worker.start()
+
+    def on_hidden_costs_loaded(self, items: list):
+        self.hidden_costs_table.setRowCount(0)
+        if not items:
+            self.hidden_costs_table.setRowCount(1)
+            self.hidden_costs_table.setItem(0, 0, QTableWidgetItem("No hidden costs"))
+            return
+
+        def get_any(d, keys, default=""):
+            for k in keys:
+                if k in d and d[k] is not None:
+                    return d[k]
+            return default
+
+        # Store hidden costs data for operations
+        self.hidden_costs_data = items
+        
+        for row_idx, item in enumerate(items):
+            rec = item if isinstance(item, dict) else {}
+            item_id = get_any(rec, ["id", "_id"])
+            name = get_any(rec, ["name", "title", "item_name"])
+            amount = get_any(rec, ["amount", "cost", "price"])
+            description = get_any(rec, ["description", "desc", "details"])
+            date = get_any(rec, ["date", "date_incurred", "created_date"])
+
+            self.hidden_costs_table.insertRow(row_idx)
+            self.hidden_costs_table.setItem(row_idx, 0, QTableWidgetItem(str(item_id)))
+            self.hidden_costs_table.setItem(row_idx, 1, QTableWidgetItem(str(name)))
+            self.hidden_costs_table.setItem(row_idx, 2, QTableWidgetItem(str(amount)))
+            self.hidden_costs_table.setItem(row_idx, 3, QTableWidgetItem(str(description)))
+            self.hidden_costs_table.setItem(row_idx, 4, QTableWidgetItem(str(date)))
+
+    def on_hidden_costs_error(self, message: str):
+        self.hidden_costs_table.setRowCount(1)
+        self.hidden_costs_table.setItem(0, 0, QTableWidgetItem(f"Error: {message}"))
+
+    def on_hidden_cost_selection_changed(self):
+        """Handle hidden costs table selection changes"""
+        selected_rows = self.hidden_costs_table.selectionModel().selectedRows()
+        if selected_rows and hasattr(self, 'hidden_costs_data'):
+            row = selected_rows[0].row()
+            if 0 <= row < len(self.hidden_costs_data):
+                self.selected_hidden_cost = self.hidden_costs_data[row]
+            else:
+                self.selected_hidden_cost = None
+        else:
+            self.selected_hidden_cost = None
+
+    def add_hidden_cost(self):
+        """Add new hidden cost record - placeholder for future implementation"""
+        QMessageBox.information(self, "Add Hidden Cost", "Add Hidden Cost functionality will be implemented soon.")
+
+    def update_hidden_cost(self):
+        """Update selected hidden cost record"""
+        selected_rows = self.hidden_costs_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "No Selection", "Please select a hidden cost record to update.")
+            return
+        
+        row = selected_rows[0].row()
+        if not hasattr(self, 'hidden_costs_data') or row >= len(self.hidden_costs_data):
+            QMessageBox.warning(self, "Invalid Selection", "Selected hidden cost record is invalid.")
+            return
+        
+        original_data = self.hidden_costs_data[row]
+        if "id" not in original_data:
+            QMessageBox.warning(self, "No ID", "Selected hidden cost record does not have an ID.")
+            return
+        
+        # Read current values from table cells
+        data = {
+            "id": self.hidden_costs_table.item(row, 0).text() if self.hidden_costs_table.item(row, 0) else "",
+            "name": self.hidden_costs_table.item(row, 1).text() if self.hidden_costs_table.item(row, 1) else "",
+            "amount": self.hidden_costs_table.item(row, 2).text() if self.hidden_costs_table.item(row, 2) else "",
+            "description": self.hidden_costs_table.item(row, 3).text() if self.hidden_costs_table.item(row, 3) else "",
+            "date": self.hidden_costs_table.item(row, 4).text() if self.hidden_costs_table.item(row, 4) else ""
+        }
+        
+        # Start update worker with id parameter
+        vehicle_name = self.vehicle["name"].replace(" ", "_").replace(".", "_").lower()
+        hidden_cost_id = data["id"]
+        url = f"http://theconeportal.net:5000/fleet_control/vehicle_hidden_costs?vehicle_name={vehicle_name}&id={hidden_cost_id}"
+        self.update_worker = UpdateWorker(url, data)
+        self.update_worker.success.connect(self.on_update_success)
+        self.update_worker.error.connect(self.on_update_error)
+        self.update_worker.start()
+
+    def delete_hidden_cost(self):
+        """Delete selected hidden cost record"""
+        if not self.selected_hidden_cost:
+            QMessageBox.warning(self, "No Selection", "Please select a hidden cost record to delete.")
+            return
+        
+        # Check if hidden cost record has an id
+        if "id" not in self.selected_hidden_cost:
+            QMessageBox.warning(self, "No ID", "Selected hidden cost record does not have an ID.")
+            return
+        
+        dialog = DeleteConfirmDialog("hidden cost", self.selected_hidden_cost, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Prepare delete data
+            data = dict(self.selected_hidden_cost)
+            
+            # Start delete worker with id parameter
+            vehicle_name = self.vehicle["name"].replace(" ", "_").replace(".", "_").lower()
+            hidden_cost_id = self.selected_hidden_cost["id"]
+            url = f"http://theconeportal.net:5000/fleet_control/vehicle_hidden_costs?vehicle_name={vehicle_name}&id={hidden_cost_id}"
+            self.delete_worker = DeleteWorker(url, data)
+            self.delete_worker.success.connect(self.on_delete_success)
+            self.delete_worker.error.connect(self.on_delete_error)
+            self.delete_worker.start()
