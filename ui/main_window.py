@@ -12,6 +12,7 @@ from ui.vehicle_selection import VehicleSelectionScreen
 from ui.vehicle_details import VehicleDetailsScreen
 from ui.add_purchase_form import AddPurchaseForm
 from ui.add_maintenance_form import AddMaintenanceForm
+from ui.add_hidden_cost_form import AddHiddenCostForm
 
 
 class MainWindow(QMainWindow):
@@ -24,6 +25,7 @@ class MainWindow(QMainWindow):
         self.vehicle_details_screen = None
         self.add_purchase_screen = None
         self.add_maintenance_screen = None
+        self.add_hidden_cost_screen = None
         self.current_vehicle = None
         self.init_ui()
 
@@ -102,7 +104,8 @@ class MainWindow(QMainWindow):
             vehicle, 
             self.show_vehicle_selection,
             on_add_purchase=self.show_add_purchase_form,
-            on_add_maintenance=self.show_add_maintenance_form
+            on_add_maintenance=self.show_add_maintenance_form,
+            on_add_hidden_cost=self.show_add_hidden_cost_form
         )
         self.stacked_widget.addWidget(self.vehicle_details_screen)
         self.stacked_widget.setCurrentWidget(self.vehicle_details_screen)
@@ -148,3 +151,17 @@ class MainWindow(QMainWindow):
         )
         self.stacked_widget.addWidget(self.add_maintenance_screen)
         self.stacked_widget.setCurrentWidget(self.add_maintenance_screen)
+
+    def show_add_hidden_cost_form(self):
+        """Show the add hidden cost form"""
+        if self.add_hidden_cost_screen:
+            self.stacked_widget.removeWidget(self.add_hidden_cost_screen)
+            self.add_hidden_cost_screen.deleteLater()
+        
+        self.add_hidden_cost_screen = AddHiddenCostForm(
+            self.current_vehicle,
+            on_back=self.return_to_vehicle_details,
+            on_success=self.return_to_vehicle_details
+        )
+        self.stacked_widget.addWidget(self.add_hidden_cost_screen)
+        self.stacked_widget.setCurrentWidget(self.add_hidden_cost_screen)

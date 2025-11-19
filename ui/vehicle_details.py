@@ -9,6 +9,7 @@ except ImportError:
 
 import requests
 from ui.delete_dialog import DeleteConfirmDialog, DeleteWorker
+from ui.add_hidden_cost_form import AddHiddenCostForm
 
 class UpdateWorker(QThread):
     success = pyqtSignal()
@@ -99,12 +100,13 @@ class HiddenCostsFetchWorker(QThread):
 class VehicleDetailsScreen(QWidget):
     """Screen to show details for a selected vehicle"""
 
-    def __init__(self, vehicle, on_back=None, on_add_purchase=None, on_add_maintenance=None):
+    def __init__(self, vehicle, on_back=None, on_add_purchase=None, on_add_maintenance=None, on_add_hidden_cost=None):
         super().__init__()
         self.vehicle = vehicle
         self.on_back = on_back
         self.on_add_purchase = on_add_purchase
         self.on_add_maintenance = on_add_maintenance
+        self.on_add_hidden_cost = on_add_hidden_cost
         self.fetch_worker = None
         self.purchases_worker = None
         self.hidden_costs_worker = None
@@ -154,11 +156,28 @@ class VehicleDetailsScreen(QWidget):
             "ID", "Job", "Date Started", "Date Completed", "Tracking", "Cost", "Notes"
         ])
         self.maint_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.maint_table.verticalHeader().setVisible(False)
         self.maint_table.itemSelectionChanged.connect(self.on_maintenance_selection_changed)
         # Show initial loading row
         self.maint_table.setRowCount(1)
         self.maint_table.setItem(0, 0, QTableWidgetItem("Loading..."))
         layout.addWidget(self.maint_table)
+
+        # Maintenance buttons
+        maint_btn_layout = QHBoxLayout()
+        add_maint_btn = QPushButton("Add Maintenance")
+        if self.on_add_maintenance:
+            add_maint_btn.clicked.connect(self.on_add_maintenance)
+        update_maint_btn = QPushButton("Update Maintenance")
+        update_maint_btn.clicked.connect(self.update_maintenance)
+        delete_maint_btn = QPushButton("Delete Maintenance")
+        delete_maint_btn.clicked.connect(self.delete_maintenance)
+        
+        maint_btn_layout.addWidget(add_maint_btn)
+        maint_btn_layout.addWidget(update_maint_btn)
+        maint_btn_layout.addWidget(delete_maint_btn)
+        maint_btn_layout.addStretch()  # Push buttons to the left
+        layout.addLayout(maint_btn_layout)
 
         # Purchases table
         purch_label = QLabel("Purchases")
@@ -169,36 +188,15 @@ class VehicleDetailsScreen(QWidget):
             "ID", "Item", "Date Purchased", "Installed", "Cost", "Store"
         ])
         self.purch_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.purch_table.verticalHeader().setVisible(False)
         self.purch_table.itemSelectionChanged.connect(self.on_purchase_selection_changed)
         # initial loading row
         self.purch_table.setRowCount(1)
         self.purch_table.setItem(0, 0, QTableWidgetItem("Loading..."))
         layout.addWidget(self.purch_table)
 
-        # Hidden Costs table
-        hidden_costs_label = QLabel("Hidden Costs")
-        hidden_costs_label.setStyleSheet("font-size: 18px; font-weight: bold;")
-        layout.addWidget(hidden_costs_label)
-        self.hidden_costs_table = QTableWidget(0, 5)
-        self.hidden_costs_table.setHorizontalHeaderLabels([
-            "ID", "Name", "Amount", "Description", "Date"
-        ])
-        self.hidden_costs_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.hidden_costs_table.itemSelectionChanged.connect(self.on_hidden_cost_selection_changed)
-        # initial loading row
-        self.hidden_costs_table.setRowCount(1)
-        self.hidden_costs_table.setItem(0, 0, QTableWidgetItem("Loading..."))
-        layout.addWidget(self.hidden_costs_table)
-
-        # Buttons for adding/deleting/updating entries
-        btn_layout = QHBoxLayout()
-        add_maint_btn = QPushButton("Add Maintenance")
-        if self.on_add_maintenance:
-            add_maint_btn.clicked.connect(self.on_add_maintenance)
-        update_maint_btn = QPushButton("Update Maintenance")
-        update_maint_btn.clicked.connect(self.update_maintenance)
-        delete_maint_btn = QPushButton("Delete Maintenance")
-        delete_maint_btn.clicked.connect(self.delete_maintenance)
+        # Purchases buttons
+        purch_btn_layout = QHBoxLayout()
         add_purch_btn = QPushButton("Add Purchase")
         if self.on_add_purchase:
             add_purch_btn.clicked.connect(self.on_add_purchase)
@@ -207,18 +205,35 @@ class VehicleDetailsScreen(QWidget):
         delete_purch_btn = QPushButton("Delete Purchase")
         delete_purch_btn.clicked.connect(self.delete_purchase)
         
-        btn_layout.addWidget(add_maint_btn)
-        btn_layout.addWidget(update_maint_btn)
-        btn_layout.addWidget(delete_maint_btn)
-        btn_layout.addWidget(add_purch_btn)
-        btn_layout.addWidget(update_purch_btn)
-        btn_layout.addWidget(delete_purch_btn)
-        layout.addLayout(btn_layout)
+        purch_btn_layout.addWidget(add_purch_btn)
+        purch_btn_layout.addWidget(update_purch_btn)
+        purch_btn_layout.addWidget(delete_purch_btn)
+        purch_btn_layout.addStretch()  # Push buttons to the left
+        layout.addLayout(purch_btn_layout)
+
+        # Hidden Costs table
+        hidden_costs_label = QLabel("Hidden Costs")
+        hidden_costs_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(hidden_costs_label)
+        self.hidden_costs_table = QTableWidget(0, 5)
+        self.hidden_costs_table.setHorizontalHeaderLabels([
+            "ID", "Name", "Cost", "Description", "Date"
+        ])
+        self.hidden_costs_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.hidden_costs_table.verticalHeader().setVisible(False)
+        self.hidden_costs_table.itemSelectionChanged.connect(self.on_hidden_cost_selection_changed)
+        # initial loading row
+        self.hidden_costs_table.setRowCount(1)
+        self.hidden_costs_table.setItem(0, 0, QTableWidgetItem("Loading..."))
+        layout.addWidget(self.hidden_costs_table)
+
+
 
         # Hidden Costs buttons
         hidden_costs_btn_layout = QHBoxLayout()
         add_hidden_cost_btn = QPushButton("Add Hidden Cost")
-        add_hidden_cost_btn.clicked.connect(self.add_hidden_cost)
+        if self.on_add_hidden_cost:
+            add_hidden_cost_btn.clicked.connect(self.add_hidden_cost)
         update_hidden_cost_btn = QPushButton("Update Hidden Cost")
         update_hidden_cost_btn.clicked.connect(self.update_hidden_cost)
         delete_hidden_cost_btn = QPushButton("Delete Hidden Cost")
@@ -617,8 +632,9 @@ class VehicleDetailsScreen(QWidget):
             self.selected_hidden_cost = None
 
     def add_hidden_cost(self):
-        """Add new hidden cost record - placeholder for future implementation"""
-        QMessageBox.information(self, "Add Hidden Cost", "Add Hidden Cost functionality will be implemented soon.")
+        """Show add hidden cost form"""
+        if self.on_add_hidden_cost:
+            self.on_add_hidden_cost()
 
     def update_hidden_cost(self):
         """Update selected hidden cost record"""
