@@ -13,6 +13,8 @@ from ui.vehicle_details import VehicleDetailsScreen
 from ui.add_purchase_form import AddPurchaseForm
 from ui.add_maintenance_form import AddMaintenanceForm
 from ui.add_hidden_cost_form import AddHiddenCostForm
+from ui.settings_screen import SettingsScreen
+from ui.theme_manager import ThemeManager
 
 
 class MainWindow(QMainWindow):
@@ -26,7 +28,9 @@ class MainWindow(QMainWindow):
         self.add_purchase_screen = None
         self.add_maintenance_screen = None
         self.add_hidden_cost_screen = None
+        self.settings_screen = None
         self.current_vehicle = None
+        self.theme_manager = ThemeManager()
         self.init_ui()
 
     def init_ui(self):
@@ -49,6 +53,9 @@ class MainWindow(QMainWindow):
         # Vehicle selection screen
         self.vehicle_selection = VehicleSelectionScreen(self.show_main_menu, self.show_vehicle_details)
         self.stacked_widget.addWidget(self.vehicle_selection)
+        
+        # Load and apply initial theme settings
+        self.load_initial_theme()
 
     def create_welcome_screen(self):
         """Create the welcome screen"""
@@ -87,12 +94,61 @@ class MainWindow(QMainWindow):
         elif action == "reports":
             self.show_screen("Reports")
         elif action == "settings":
-            self.show_screen("Settings")
+            self.show_settings_screen()
 
     def show_screen(self, screen_name):
         """Show a placeholder screen"""
         # This can be expanded to show different screens
         print(f"Navigating to: {screen_name}")
+        
+    def show_settings_screen(self):
+        """Show the settings screen"""
+        if self.settings_screen:
+            self.stacked_widget.removeWidget(self.settings_screen)
+            self.settings_screen.deleteLater()
+        self.settings_screen = SettingsScreen(on_back=self.show_main_menu)
+        self.settings_screen.dark_mode_changed.connect(self.on_dark_mode_changed)
+        self.stacked_widget.addWidget(self.settings_screen)
+        self.stacked_widget.setCurrentWidget(self.settings_screen)
+        
+    def on_dark_mode_changed(self, is_dark_mode):
+        """Handle dark mode toggle"""
+        app = self.window().parent() if self.window().parent() else None
+        if not app:
+            # Try to get the application instance
+            try:
+                from PyQt6.QtWidgets import QApplication
+                app = QApplication.instance()
+            except ImportError:
+                from PyQt5.QtWidgets import QApplication
+                app = QApplication.instance()
+        
+        if app:
+            self.theme_manager.apply_theme(app, is_dark_mode)
+            
+    def load_initial_theme(self):
+        """Load and apply the initial theme from settings"""
+        import json
+        import os
+        
+        try:
+            if os.path.exists("settings.json"):
+                with open("settings.json", 'r') as f:
+                    settings = json.load(f)
+                is_dark_mode = settings.get("dark_mode", False)
+                
+                # Get the application instance and apply theme
+                try:
+                    from PyQt6.QtWidgets import QApplication
+                    app = QApplication.instance()
+                except ImportError:
+                    from PyQt5.QtWidgets import QApplication
+                    app = QApplication.instance()
+                
+                if app:
+                    self.theme_manager.apply_theme(app, is_dark_mode)
+        except Exception as e:
+            print(f"Error loading initial theme: {e}")
 
     def show_vehicle_details(self, vehicle):
         """Show the vehicle details screen for the selected vehicle"""
