@@ -14,6 +14,7 @@ from ui.add_purchase_form import AddPurchaseForm
 from ui.add_maintenance_form import AddMaintenanceForm
 from ui.add_hidden_cost_form import AddHiddenCostForm
 from ui.settings_screen import SettingsScreen
+from ui.reports_screen import ReportsScreen
 from ui.theme_manager import ThemeManager
 
 
@@ -29,6 +30,7 @@ class MainWindow(QMainWindow):
         self.add_maintenance_screen = None
         self.add_hidden_cost_screen = None
         self.settings_screen = None
+        self.reports_screen = None
         self.current_vehicle = None
         self.theme_manager = ThemeManager()
         self.init_ui()
@@ -92,14 +94,18 @@ class MainWindow(QMainWindow):
         elif action == "fleet":
             self.stacked_widget.setCurrentIndex(2)
         elif action == "reports":
-            self.show_screen("Reports")
+            self.show_reports_screen()
         elif action == "settings":
             self.show_settings_screen()
 
-    def show_screen(self, screen_name):
-        """Show a placeholder screen"""
-        # This can be expanded to show different screens
-        print(f"Navigating to: {screen_name}")
+    def show_reports_screen(self):
+        """Show the reports screen"""
+        if self.reports_screen:
+            self.stacked_widget.removeWidget(self.reports_screen)
+            self.reports_screen.deleteLater()
+        self.reports_screen = ReportsScreen(on_back=self.show_main_menu)
+        self.stacked_widget.addWidget(self.reports_screen)
+        self.stacked_widget.setCurrentWidget(self.reports_screen)
         
     def show_settings_screen(self):
         """Show the settings screen"""

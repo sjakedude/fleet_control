@@ -129,6 +129,42 @@ class ThemeManager:
         QScrollBar::handle:vertical:hover {
             background-color: #999999;
         }
+        
+        /* Table styling for light mode */
+        QTableWidget {
+            background-color: #ffffff;
+            color: #000000;
+            gridline-color: #cccccc;
+            border: 1px solid #cccccc;
+        }
+        
+        QTableWidget::item {
+            background-color: #ffffff;
+            color: #000000;
+            border: none;
+            padding: 8px;
+        }
+        
+        QTableWidget::item:selected {
+            background-color: #0078d4;
+            color: #ffffff;
+        }
+        
+        QTableWidget::item:alternate {
+            background-color: #f5f5f5;
+        }
+        
+        QHeaderView::section {
+            background-color: #f0f0f0;
+            color: #000000;
+            border: 1px solid #cccccc;
+            padding: 8px;
+            font-weight: bold;
+        }
+        
+        QHeaderView::section:hover {
+            background-color: #e0e0e0;
+        }
         """
     
     def get_dark_theme(self):
@@ -259,6 +295,42 @@ class ThemeManager:
         
         QScrollBar::handle:vertical:hover {
             background-color: #888888;
+        }
+        
+        /* Table styling for dark mode */
+        QTableWidget {
+            background-color: #2b2b2b;
+            color: #ffffff;
+            gridline-color: #555555;
+            border: 1px solid #555555;
+        }
+        
+        QTableWidget::item {
+            background-color: #2b2b2b;
+            color: #ffffff;
+            border: none;
+            padding: 8px;
+        }
+        
+        QTableWidget::item:selected {
+            background-color: #0078d4;
+            color: #ffffff;
+        }
+        
+        QTableWidget::item:alternate {
+            background-color: #353535;
+        }
+        
+        QHeaderView::section {
+            background-color: #404040;
+            color: #ffffff;
+            border: 1px solid #555555;
+            padding: 8px;
+            font-weight: bold;
+        }
+        
+        QHeaderView::section:hover {
+            background-color: #505050;
         }
         
         /* Custom styles for specific elements */
