@@ -161,6 +161,7 @@ class VehicleDetailsScreen(QWidget):
         # Show initial loading row
         self.maint_table.setRowCount(1)
         self.maint_table.setItem(0, 0, QTableWidgetItem("Loading..."))
+        self.maint_table.setMinimumHeight(150)
         layout.addWidget(self.maint_table)
 
         # Maintenance buttons
@@ -193,6 +194,7 @@ class VehicleDetailsScreen(QWidget):
         # initial loading row
         self.purch_table.setRowCount(1)
         self.purch_table.setItem(0, 0, QTableWidgetItem("Loading..."))
+        self.purch_table.setMinimumHeight(150)
         layout.addWidget(self.purch_table)
 
         # Purchases buttons
@@ -225,6 +227,7 @@ class VehicleDetailsScreen(QWidget):
         # initial loading row
         self.hidden_costs_table.setRowCount(1)
         self.hidden_costs_table.setItem(0, 0, QTableWidgetItem("Loading..."))
+        self.hidden_costs_table.setMinimumHeight(150)
         layout.addWidget(self.hidden_costs_table)
 
 

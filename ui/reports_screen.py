@@ -376,6 +376,7 @@ class ReportsScreen(QWidget):
         maint_table.verticalHeader().setVisible(False)
         maint_table.setAlternatingRowColors(True)
         maint_table.setSortingEnabled(True)
+        maint_table.setFrameShape(QFrame.Shape.NoFrame)
         
         # Get top 10 vehicles
         top_maintenance = maintenance_counts.most_common(10)
@@ -387,7 +388,14 @@ class ReportsScreen(QWidget):
         
         # Resize columns to content
         maint_table.resizeColumnsToContents()
-        maint_table.setMaximumHeight(300)
+        maint_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        maint_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Resize table to fit all rows
+        total_height = maint_table.horizontalHeader().height()
+        for i in range(maint_table.rowCount()):
+            total_height += maint_table.rowHeight(i)
+        maint_table.setMinimumHeight(total_height + 2)
+        maint_table.setMaximumHeight(total_height + 2)
         
         # Add label and table
         maint_section = QVBoxLayout()
@@ -416,6 +424,7 @@ class ReportsScreen(QWidget):
         purch_table.verticalHeader().setVisible(False)
         purch_table.setAlternatingRowColors(True)
         purch_table.setSortingEnabled(True)
+        purch_table.setFrameShape(QFrame.Shape.NoFrame)
         
         # Get top 10 vehicles
         top_purchases = purchase_counts.most_common(10)
@@ -427,7 +436,14 @@ class ReportsScreen(QWidget):
         
         # Resize columns to content
         purch_table.resizeColumnsToContents()
-        purch_table.setMaximumHeight(300)
+        purch_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        purch_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Resize table to fit all rows
+        total_height = purch_table.horizontalHeader().height()
+        for i in range(purch_table.rowCount()):
+            total_height += purch_table.rowHeight(i)
+        purch_table.setMinimumHeight(total_height + 2)
+        purch_table.setMaximumHeight(total_height + 2)
         
         # Add label and table
         purch_section = QVBoxLayout()
